@@ -32,7 +32,9 @@ This approach requires the construction of a comprehensive and high-quality sour
 
 ### Trainingset_utils
 
-| File Name            | Descriptio                                                    |
+This folder contains the function used to build the training dataset to perform the fine training of our neural network.
+
+| File Name            | Description                                                   |
 | -------------------- | --------------------------------------------------------------|
 | make_cat.py          | Contains the functions to build the initial catalogs.         |
 | corr_cat.py          | Contains the functions to clean the produced catalogs         |
@@ -40,3 +42,19 @@ This approach requires the construction of a comprehensive and high-quality sour
 | main.py              | Main python file                                              |
 | config.ini           | Example of the config file (used as a parameter of main.py)   |
 | config_LoTSS.ini     | Config file used for LoTSS                                    |
+
+#### make_cat.py
+
+fill_im_hole(image)
+
+  Fill the NaN values inside an image with the median value of the image.
+	If the image is full of NaN, fill the image with 0 only.
+
+  Args:
+		image (ndarray(dtype=float)): A 2D array of flux/beam values.
+
+  Returns:
+		fill_image (ndarray(dtype=float)): A 2D array with NaN values replaced by
+						the overall background signal.
+      
+===========================================================================================================================

@@ -30,7 +30,7 @@ This approach requires the construction of a comprehensive and high-quality sour
 
 ## Content
 
-You can find the details concerning the environment in the [wiki](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Environment).
+You can find the details concerning the environment in the [wiki](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/).
 
 ### [Trainingset_utils](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Trainingset_utils)
 

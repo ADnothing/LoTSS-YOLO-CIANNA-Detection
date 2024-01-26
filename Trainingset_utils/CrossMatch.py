@@ -87,7 +87,7 @@ def NN_Xmatch(cat_test, cat_ref, maxsep, colRA_test, colDec_test, colRA_ref, col
 	Args:
 		cat_test (astropy.table.Table): Catalog to be tested.
 		cat_ref (astropy.table.Table): Reference catalog for cross-matching.
-		maxsep (Quantity): Maximum separation allowed for matching. (dimension of an anle)
+		maxsep (Quantity): Maximum separation allowed for matching. (dimension of an angle)
 		colRA_test (str): Column name containing Right Ascension in the catalog to be tested.
 		colDec_test (str): Column name containing Declination in the catalog to be tested.
 		colRA_ref (str): Column name containing Right Ascension in the reference catalog.

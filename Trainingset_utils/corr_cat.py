@@ -41,7 +41,7 @@ def Rexcl(flux, P1, R1, P2, R2):
 		flux (float): Integrated flux value for which the rejection radius is calculated.
 		P1 (float): Typical low integrated flux (sources with no artifacts).
 		R1 (float): Typical radius of exclusion for the low integrated flux.
-		P2 (float): Typical high integrated flux (sources with lot of artifacts).
+		P2 (float): Typical high integrated flux (sources with a lot of artifacts).
 		R2 (float): Typical radius of exclusion for high integrated flux sources.
 
 	Returns:
@@ -60,8 +60,8 @@ def clean_cat(name_file, res, R1, P1, R2, P2, survey):
 	Clean the catalog generated with crea_dendrogram to suppress multiple detections
 	as well as supposedly false detections.
 	This process results in the writing of 2 files:
-		- The catalog cleaned of a typical field (overwriting the input file).
-		- The "To Test Sources Catalog" (TTSC) containing all rejected sources that could be True detections.
+		- The cleaned catalog of a field (overwriting the input file).
+		- The "To Test Sources Catalog" (TTSC) contains all rejected sources that could be True detections.
 		
 	The name of the TTSC is: TTSC_{survey}.txt
 
@@ -206,7 +206,7 @@ def get_overlap_sources(cat, field_fits):
 
 	Returns:
 		tuple: Two numpy arrays - the first containing sources that overlap with the field,
-			and the second containing sources that do not overlap.
+			and the second contains sources that do not overlap.
 
 	This function extracts sources from a catalog based on whether they overlap with
 	a specified field represented by a FITS file. It calculates the diagonal distance
@@ -244,7 +244,7 @@ def clean_overlap(data, res, R1, P1, R2, P2, survey):
 	Clean a catalog by removing multiple detections and excluding artifacts
 	around bright sources based on spatial overlap.
 	This function has the same process as "clean_cat" but is 
-	specific for the case when we clean overlapping region.
+	specific for the case when we clean overlapping regions.
 	The expected data in output is typically the output "cat_overlaped"
 	from the function "get_overlap_sources".
 
@@ -338,7 +338,7 @@ def clean_overlap(data, res, R1, P1, R2, P2, survey):
 def flux_NMS(cat, reject):
 	"""
 	Perform a Non-Maximum Suppression (NMS) process on a catalog.
-	The parameter taken into account for the suppresion is the integrated flux of the sources.
+	The parameter taken into account for the suppression is the integrated flux of the sources.
 
 	Args:
 		cat (numpy.ndarray): Input catalog containing source information.

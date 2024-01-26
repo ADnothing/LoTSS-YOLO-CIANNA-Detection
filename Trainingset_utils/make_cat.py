@@ -132,7 +132,7 @@ def crea_dendrogram(fits_file, delta, promt=False):
 	Args:
 		fits_file (str): Path to the fits file.
 		delta (float): Parameter from the astrodendro package. Step between iterations of the detection.
-		promt (bool, optional, default: False): If True, prompt info.
+		prompt (bool, optional, default: False): If True, prompt info.
 
 	Returns:
 		None.

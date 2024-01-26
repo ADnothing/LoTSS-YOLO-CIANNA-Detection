@@ -27,3 +27,16 @@ The first step is to evaluate MINERVA's method capabilities on the selected surv
 By doing this, we will evaluate if the SDC1 is a good enough approximation of observational data for the LoTSS.
 The second step consists of using observational examples to perform complementary network training to better account for the survey's specificities.
 This approach requires the construction of a comprehensive and high-quality source catalog based on a different method than the one used to define the reference source catalog.
+
+## Content
+
+### Trainingset_utils
+
+| File Name            | Descriptio                                                    |
+| -------------------- | --------------------------------------------------------------|
+| make_cat.py          | Contains the functions to build the initial catalogs.         |
+| corr_cat.py          | Contains the functions to clean the produced catalogs         |
+| CrossMatch.py        | Contains the function to perform cross-matches                |
+| main.py              | Main python file                                              |
+| config.ini           | Example of the config file (used as a parameter of main.py)   |
+| config_LoTSS.ini     | Config file used for LoTSS                                    |

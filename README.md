@@ -32,7 +32,7 @@ This approach requires the construction of a comprehensive and high-quality sour
 
 You can find the details concerning the environment in the [wiki](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Environment).
 
-### [Trainingset_utils](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Environment](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Trainingset_utils)
+### [Trainingset_utils](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Trainingset_utils)
 
 This folder contains the function used to build the training dataset to perform the fine training of our neural network.
 

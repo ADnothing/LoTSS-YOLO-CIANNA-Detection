@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 26 Jan 2024
-#Env: Python 3.6.13
+#Adrien Anthore, 29 Jan 2024
+#Env: Python 3.6.7
 #CrossMatch.py
 
 import warnings

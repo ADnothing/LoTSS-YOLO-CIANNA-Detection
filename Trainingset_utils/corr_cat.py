@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 26 jan 2023
-#Env: Python 3.6.13
+#Adrien Anthore, 29 Jan 2024
+#Env: Python 3.6.7
 #corr_cat.py
 
 import numpy as np

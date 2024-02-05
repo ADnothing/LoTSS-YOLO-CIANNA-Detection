@@ -1,6 +1,18 @@
 print("\t"*3,"Testing the current environment\n")
 print("="*80)
 
+#Python check
+print("\t"*3,"Python")
+import sys
+py_v = sys.version.split(" ")[0]
+if not(int(py_v.split(".")[1]) >= 6 and int(py_v.split(".")[1]) <= 9):
+	print("WARNING")
+	print(f"You are using Python {py_v}")
+	print("We recomand using Python 3.6.7 or an equivalent.")
+else:
+	print("Good version of Python")
+print("="*80)
+
 #NumPy check
 print("\t"*3,"NumPy")
 try:

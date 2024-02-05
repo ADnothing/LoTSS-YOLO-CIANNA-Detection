@@ -16,7 +16,7 @@ The team noticeably reached first place in the SDC2 and achieved much better res
 The method must now be generalized on observational radio datasets, which can be done using various surveys from precursor instruments.
 
 This project lies in this global effort of applying the method to existing radio datasets.
-I noticeably focused on trying to apply the detector trained on the first SDC on observational continuum surveys, namely the LoFAR Two-metre Sky Survey (LoTSS DR2 Shimwell, et al. (2022)).
+I noticeably focused on applying the detector trained on the first SDC on observational continuum surveys, namely the LoFAR Two-metre Sky Survey (LoTSS DR2 Shimwell, et al. (2022)).
 This survey is already associated with a source catalog derived using the same classical detection method.
 This catalog will be considered as a reference to which our detection results will be systematically compared.
 Because MINERVA's source detector is based on supervised machine learning, it must be trained for the survey it will be applied to.
@@ -25,12 +25,12 @@ This can be done in two different ways: i) by using simulated examples, or ii) b
 This project is separated into two steps.
 The first step is to evaluate MINERVA's method capabilities on the selected survey by performing source detection using the network trained on the simulated data from the SDC1.
 By doing this, we will evaluate if the SDC1 is a good enough approximation of observational data for the LoTSS.
-The second step consists of using observational examples to perform complementary network training to better account for the survey's specificities.
+The second step involves using observational examples to perform complementary network training to better account for the survey's specificities.
 This approach requires the construction of a comprehensive and high-quality source catalog based on a different method than the one used to define the reference source catalog.
 
 ## Content
 
-You can find the details concerning the environment in the [wiki](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/).
+You can find the details concerning the environment in the [wiki](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/). Run test_env.py on your computer to test your environment.
 
 ### [Trainingset_utils](https://github.com/ADnothing/LoTSS-YOLO-Detection/wiki/Trainingset_utils)
 

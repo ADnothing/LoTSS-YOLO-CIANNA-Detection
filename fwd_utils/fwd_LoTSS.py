@@ -52,13 +52,13 @@ for fits_file in list_fits:
 
 	print("\nMosaic:", fits_file,"\n")
 
-	hdul = fits.open(LoTss_path+fits_file)
-	full_img = hdul[0].data
+	hdul = fits.open(LoTSS_path+fits_file)
+	full_img = np.squeeze(hdul[0].data)
 	wcs_img = WCS(hdul[0].header)
 	hdul.close()
 
-	min_pix = np.percentile(full_img, 70)
-	max_pix = np.percentile(full_img, 99)
+	min_pix = np.nanpercentile(full_img, 70)
+	max_pix = np.nanpercentile(full_img, 99)
 
 	map_pixel_size = np.shape(full_img)[0]
 	size_px = map_pixel_size
@@ -118,7 +118,8 @@ for fits_file in list_fits:
 		if(np.count_nonzero(~np.isnan(patch[px_min:px_max,py_min:py_max]))==0):
 			patch[px_min:px_max,py_min:py_max] = np.nan_to_num(patch[px_min:px_max,py_min:py_max], nan=0)
 		else:
-			patch[px_min:px_max,py_min:py_max] = np.nan_to_num(patch[px_min:px_max,py_min:py_max], nan=center)
+			med = np.nanmedian(patch[px_min:px_max,py_min:py_max])
+			patch[px_min:px_max,py_min:py_max] = np.nan_to_num(patch[px_min:px_max,py_min:py_max], nan=med)
 
 		pred_all[i_d,:] = patch.flatten("C")
 

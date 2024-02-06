@@ -327,4 +327,20 @@ def second_NMS_local(boxes, comp_boxes, c_tile, direction, nms_threshold):
 
 
 
+def pooling(mat,ksize):
 
+	m, n = mat.shape[:2]
+	ky,kx=ksize
+
+	_ceil=lambda x,y: int(numpy.ceil(x/float(y)))
+
+
+	ny=m//ky
+	nx=n//kx
+	mat_pad=mat[:ny*ky, :nx*kx, ...]
+
+	new_shape=(ny,ky,nx,kx)+mat.shape[2:]
+
+	result=np.nanmean(mat_pad.reshape(new_shape),axis=(1,3))
+
+	return result

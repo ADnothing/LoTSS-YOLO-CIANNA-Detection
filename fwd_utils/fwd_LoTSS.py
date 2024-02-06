@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#Adrien ANTHORE, 05 Feb 2024
+#Adrien ANTHORE, 06 Feb 2024
 #Env: Python 3.6.7
 #fwd_LoTSS.py
 
@@ -53,11 +53,17 @@ for fits_file in list_fits:
 	print("\nMosaic:", fits_file,"\n")
 
 	hdul = fits.open(LoTSS_path+fits_file)
-	full_img = np.squeeze(hdul[0].data)
+	raw_img = np.squeeze(hdul[0].data)
 	wcs_img = WCS(hdul[0].header)
 	hdul.close()
+	
+	#Average pooling
+	K = int(hdul[0].header["BMAJ"]/(1.5/3600))
+	L = int(hdul[0].header["BMAJ"]/(1.5/3600))
 
-	min_pix = np.nanpercentile(full_img, 70)
+	full_img = pooling(raw_img, (K,L))
+
+	min_pix = np.nanpercentile(full_img, 80)
 	max_pix = np.nanpercentile(full_img, 99)
 
 	map_pixel_size = np.shape(full_img)[0]

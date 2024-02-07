@@ -33,15 +33,10 @@ for ind, fwd_dat in enumerate(list_fwd):
 	cat_file = "./cat_res/pred_"+fwd_dat[5:-4]+".txt"
 
 	hdul = fits.open(LoTSS_path+fwd_dat[11:-4]+".fits")
-	raw_img = np.squeeze(hdul[0].data)
+	full_img = np.squeeze(hdul[0].data)
 	wcs_img = WCS(hdul[0].header)
+	wcs_raw = WCS(hdul[0].header)
 	hdul.close()
-	
-	#Average pooling
-	K = int(hdul[0].header["BMAJ"]/(1.5/3600))
-	L = int(hdul[0].header["BMAJ"]/(1.5/3600))
-
-	full_img = pooling(raw_img, (K,L))
 
 	min_pix = np.nanpercentile(full_img, 70.)
 	max_pix = np.nanpercentile(full_img, 99.)

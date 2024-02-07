@@ -53,15 +53,9 @@ for fits_file in list_fits:
 	print("\nMosaic:", fits_file,"\n")
 
 	hdul = fits.open(LoTSS_path+fits_file)
-	raw_img = np.squeeze(hdul[0].data)
+	full_img = np.squeeze(hdul[0].data)
 	wcs_img = WCS(hdul[0].header)
 	hdul.close()
-	
-	#Average pooling
-	K = int(hdul[0].header["BMAJ"]/(1.5/3600))
-	L = int(hdul[0].header["BMAJ"]/(1.5/3600))
-
-	full_img = pooling(raw_img, (K,L))
 
 	min_pix = np.nanpercentile(full_img, 80)
 	max_pix = np.nanpercentile(full_img, 99)
@@ -69,7 +63,6 @@ for fits_file in list_fits:
 	map_pixel_size = np.shape(full_img)[0]
 	size_px = map_pixel_size
 	size_py = np.shape(full_img)[1]
-
 
 	nb_area_w = int((map_pixel_size-orig_offset)/patch_shift) + 1
 	nb_area_h = int((map_pixel_size-orig_offset)/patch_shift) + 1

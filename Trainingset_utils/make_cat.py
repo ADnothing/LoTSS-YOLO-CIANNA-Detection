@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 29 Jan 2024
+#Adrien Anthore, 08 Feb 2024
 #Env: Python 3.6.7
 #make_cat.py
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
@@ -158,7 +157,7 @@ def crea_dendrogram(fits_file, delta, promt=False):
 
 	#Get the "min_value" parameter for astrodendro.
 	flat_image = np.sort(image[~np.isnan(image)])
-	min_val=np.percentile(flat_image, 70)
+	min_val=np.percentile(flat_image, 65)
 	
 	if promt:
 		print("min_value :",min_val)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 29 Jan 2024
+#Adrien Anthore, 08 Feb 2024
 #Env: Python 3.6.7
 #corr_cat.py
 
@@ -55,15 +55,13 @@ def Rexcl(flux, P1, R1, P2, R2):
 	
 #===============================================================================================================
 	
-def clean_cat(name_file, res, R1, P1, R2, P2, survey):
+def clean_cat(name_file, res, R1, P1, R2, P2):
 	"""
 	Clean the catalog generated with crea_dendrogram to suppress multiple detections
 	as well as supposedly false detections.
 	This process results in the writing of 2 files:
 		- The cleaned catalog of a field (overwriting the input file).
 		- The "To Test Sources Catalog" (TTSC) contains all rejected sources that could be True detections.
-		
-	The name of the TTSC is: TTSC_{survey}.txt
 
 	Args:
 		name_file (str): File path of the catalog generated with crea_dendrogram.
@@ -72,7 +70,6 @@ def clean_cat(name_file, res, R1, P1, R2, P2, survey):
 		P1 (float): Parameter P1 for rejection radius calculation.
 		R2 (float): Parameter R2 for rejection radius calculation.
 		P2 (float): Parameter P2 for rejection radius calculation.
-		survey (str): Name of the survey.
 
 	Returns:
 		None.
@@ -121,33 +118,34 @@ def clean_cat(name_file, res, R1, P1, R2, P2, survey):
 		
 	data_pos = SkyCoord(data[:,0]*u.deg, data[:,1]*u.deg, frame='icrs')
 	totest=0
+	
+	fitsname = name_file.split("/")[-1].split("_")[0]
 	for source in excl_array:
 				
 		excl_pos = SkyCoord(source[0]*u.deg, source[1]*u.deg, frame='icrs')
 		sep_array = excl_pos.separation(data_pos)
 				
+		
 		if source[2]>1 and not(any(sep_array.arcsecond<res)):
-			TTSC = open("TTSC_"+survey+".txt", 'a')
+			TTSC = open("./TTSC/TTSC_"+fitsname+".txt", 'a')
 			np.savetxt(TTSC, [source], delimiter='\t')
 			TTSC.close()
 			totest+=1
 	
-	final_data = data[data[:,2]>2e-1]
+	final_data = data[data[:,2]>3]
 	excl += len(data)-len(final_data)
 	
-	TTSC = open("TTSC_"+survey+".txt", 'a')
-	np.savetxt(TTSC, data[data[:,2]<2e-1], delimiter='\t')
+	TTSC = open("./TTSC/TTSC_"+fitsname+".txt", 'a')
+	np.savetxt(TTSC, data[data[:,2]<=3], delimiter='\t')
 	TTSC.close()
 	totest += len(data)-len(final_data)
 	
 	f = open(name_file, 'w')
-	if final_data.shape[1] == 6:
-		np.savetxt(f, np.hstack((final_data,np.zeros((final_data.shape[0],1)))), fmt=['%.6f', '%.6f', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], header="_RAJ2000\t_DECJ2000\tSpeakTot\tMaj\tMin\tPA\tflag\n", delimiter='\t', comments='')
-	else:
-		np.savetxt(f, final_data, fmt=['%.6f', '%.6f', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], header="_RAJ2000\t_DECJ2000\tSpeakTot\tMaj\tMin\tPA\tflag\n", delimiter='\t', comments='')
+	np.savetxt(f, np.hstack((final_data,np.zeros((final_data.shape[0],1)))), fmt=['%.6f', '%.6f', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], header="_RAJ2000\t_DECJ2000\tSpeakTot\tMaj\tMin\tPA\tflag\n", delimiter='\t', comments='')
 	f.close()
 	
-	print("\nNumber of exclusions: %d"%excl)
+	print("\nNumber of confidence sources:", len(final_data))
+	print("Number of exclusions: %d"%excl)
 	print("%d sources to test"%totest)
 	
 #===============================================================================================================
@@ -236,102 +234,6 @@ def get_overlap_sources(cat, field_fits):
 	cat_residual = cat[mask_residual]
 	
 	return cat_overlaped, cat_residual
-	
-#===============================================================================================================
-	
-def clean_overlap(data, res, R1, P1, R2, P2, survey):
-	"""
-	Clean a catalog by removing multiple detections and excluding artifacts
-	around bright sources based on spatial overlap.
-	This function has the same process as "clean_cat" but is 
-	specific for the case when we clean overlapping regions.
-	The expected data in output is typically the output "cat_overlaped"
-	from the function "get_overlap_sources".
-
-	Args:
-		data (numpy.ndarray): Input catalog containing source information.
-		res (float): Resolution of the instrument.
-		R1 (float): Parameter R1 for rejection radius calculation.
-		P1 (float): Parameter P1 for rejection radius calculation.
-		R2 (float): Parameter R2 for rejection radius calculation.
-		P2 (float): Parameter P2 for rejection radius calculation.
-		survey (str): Name of the survey.
-
-	Returns:
-		numpy.ndarray: Cleaned catalog containing sources that pass the cleaning criteria.
-	"""
-	
-	excl = 0 #Number of exclusion (is displayed for the user)
-	
-	data = data[np.argsort(-data[:,2])]
-	
-	i = 0 #progress indice
-	excl_array = [] #excluded sources
-	while i<data.shape[0]-1:
-
-		flux = data[i,2]
-		R = Rexcl(flux, P1, R1, P2, R2)
-			
-		c1 = SkyCoord(data[i,0]*u.deg, data[i,1]*u.deg, frame='icrs')
-		c2 = SkyCoord(data[i+1:,0]*u.deg, data[i+1:,1]*u.deg, frame='icrs')
-		sep_array = c1.separation(c2)
-			
-		#Here is the exclusion condition,
-		#A source to be excluded must :
-		#Be closer than 2 arcsecond to the current source
-		#or be inside the rejection radius with a flux lower than 100 mJy
-		mask1 = sep_array.arcsecond<res
-		mask2 = np.logical_and(data[i+1:,2]<1e2,sep_array.arcsecond < R)
-		excl_ind = np.where(np.logical_or(mask2, mask1))[0] + i + 1
-			
-			
-		for ind in sorted(excl_ind, reverse=True):
-				
-			excl_source = data[ind, :]
-			excl_array.append(excl_source)
-				
-			data = np.delete(data, ind, 0)
-			excl+=1
-		
-		i+=1
-		
-		progress = (i + 1) / (data.shape[0]-1)
-		update_progress(progress)
-	
-	
-		
-	data_pos = SkyCoord(data[:,0]*u.deg, data[:,1]*u.deg, frame='icrs')
-	totest=0
-	for source in excl_array:
-				
-		excl_pos = SkyCoord(source[0]*u.deg, source[1]*u.deg, frame='icrs')
-		sep_array = excl_pos.separation(data_pos)
-				
-		if source[2]>1 and not(any(sep_array.arcsecond<res)):
-			TTSC = open("TTSC_"+survey+".txt", 'a')
-			np.savetxt(TTSC, [source], delimiter='\t')
-			TTSC.close()
-			totest+=1
-			
-			
-	
-	final_data = data[data[:,2]>2e-1]
-	excl += len(data)-len(final_data)
-	
-	TTSC = open("TTSC_"+survey+".txt", 'a')
-	np.savetxt(TTSC, data[data[:,2]<2e-1], delimiter='\t')
-	TTSC.close()
-	totest += len(data)-len(final_data)
-		
-			
-	print("\nNumber of exclusions: %d"%excl)
-	print("%d sources to test"%totest)
-			
-		
-	if final_data.shape[1] == 6:
-		return np.hstack((final_data,np.zeros((final_data.shape[0],1))))
-	else:
-		return final_data
 		
 #===============================================================================================================
 		

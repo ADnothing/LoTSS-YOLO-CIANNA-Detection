@@ -132,11 +132,11 @@ def clean_cat(name_file, res, R1, P1, R2, P2):
 			TTSC.close()
 			totest+=1
 	
-	final_data = data[data[:,2]>3]
+	final_data = data[data[:,2]>1]
 	excl += len(data)-len(final_data)
 	
 	TTSC = open("./TTSC/TTSC_"+fitsname+".txt", 'a')
-	np.savetxt(TTSC, data[data[:,2]<=3], delimiter='\t')
+	np.savetxt(TTSC, data[data[:,2]<=1], delimiter='\t')
 	TTSC.close()
 	totest += len(data)-len(final_data)
 	

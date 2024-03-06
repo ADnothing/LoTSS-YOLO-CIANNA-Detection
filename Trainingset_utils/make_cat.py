@@ -8,14 +8,24 @@ import numpy as np
 
 from tqdm import tqdm
 
+import time
+
 from astropy.io import fits
 from astropy import wcs as WCS
 from astropy.coordinates import SkyCoord
+from astropy.wcs.utils import pixel_to_skycoord
 from astropy import units as u
 from astropy.table import Table
 from astropy.nddata import Cutout2D
 
+from astroquery.xmatch import XMatch
+from astroquery.vizier import Vizier
+Vizier.ROW_LIMIT = -1
+
 from astrodendro import Dendrogram, pp_catalog
+
+from corr_cat import third_NMS, clean_cat
+from CrossMatch import NN_Xmatch
 
 
 def fill_im_hole(image):
@@ -123,62 +133,55 @@ def patch_gen(image, wcs, patch_size=512, patch_shift=480, orig_offset=60):
 			
 #===============================================================================================================
 
-def crea_dendrogram(fits_file, delta, promt=False):
+def crea_dendrogram(fits_file, params, p=85):
 	"""
-	Generate dendrograms and catalogs from a fits file using the library astrodendro.
-	(C.f. https://dendrograms.readthedocs.io/en/stable/)
-
+	Generate dendrograms and catalogs from a FITS file using the AstroDendro package.
+    
 	Args:
-		fits_file (str): Path to the fits file.
-		delta (float): Parameter from the astrodendro package. Step between iterations of the detection.
-		prompt (bool, optional, default: False): If True, prompt info.
+		fits_file (str): Path to the FITS file.
+		params (tuple): Tuple containing parameters for dendrogram computation:
+			- res (float): Resolution of the instrument.
+			- delta (float): Parameter from the AstroDendro package. Step between iterations of the detection.
+			- R1 (float): Parameter for cleaning the catalog.
+			- P1 (float): Parameter for cleaning the catalog.
+			- R2 (float): Parameter for cleaning the catalog.
+			- P2 (float): Parameter for cleaning the catalog.
+		p (int, optional): Percentile value for minimum pixel value taken for detection. Default is 85.
 
 	Returns:
 		None.
 	"""
-
-	#Get the image withits wcs
+	
+	#Extract parameters from the params tuple
+	res, delta, R1, P1, R2, P2 = params
+	
+	#Read FITS file and extract image data and WCS information
 	hdul = fits.open(fits_file)
 	image = np.squeeze(hdul[0].data)
 	hdr = hdul[0].header
 	hdul.close()
 	wcs = WCS.WCS(hdr)
 	
-	#Definition of the meta data that will be use to generate the pp_catalog.
-	#data_unit correspond to the data unit of the pixels
-	#Spatial_scale correspond to the reolution of the instrument.
-	#beam_major/beam_minor correspond to the beam size along its 2 axis.
-	#see the doc for more details.
+	#Define metadata for generating the catalog
 	metadata = {}
 	metadata['data_unit'] = u.Jy/u.beam
 	metadata['spatial_scale'] =  (hdr["CDELT2"]* u.deg).to(u.arcsec)
 	metadata['beam_major'] =  (hdr["BMAJ"]* u.deg).to(u.arcsec)
 	metadata['beam_minor'] = (hdr["BMIN"]* u.deg).to(u.arcsec)
-
-	#Get the "min_value" parameter for astrodendro.
-	flat_image = np.sort(image[~np.isnan(image)])
-	min_val=np.percentile(flat_image, 65)
-	
-	if promt:
-		print("min_value :",min_val)
-		print("delta :", delta)
 	
 	patches = patch_gen(image, wcs)
 	nb_patch = len(patches)
 
-	if promt:
-		print("Catalogs generation...")
 	#The catalog will be stored in a single file
 	#you may change the path of the destination here.
 	name_file = "./dendrocat/"+fits_file.split("/")[-1][:-5]+"_DendCat.txt"
-	f = open(name_file, 'w')
-	f.write("_RAJ2000\t_DECJ2000\tSpeakTot\tMaj\tMin\tPA\n")
-	f.close()
 	
 	#min number of pixel to be taken into account to compute a dendrogram.
 	#see compute function parameters.
 	min_pix_nb = 2*int(np.sqrt(hdr["BMAJ"]*hdr["BMIN"]/(hdr["CDELT2"]**2)))
-
+	
+	mean = np.nanmean(image)
+	
 	for i in tqdm(range(nb_patch)):
 	
 		patch = patches[i].data
@@ -192,11 +195,15 @@ def crea_dendrogram(fits_file, delta, promt=False):
 			#the compute function to run properly.
 			patch = fill_im_hole(patch)
 			
+			min_val = np.percentile(patch, p)
+			if min_val <= 0:
+				min_val = mean
+			
 			#Computation of the dendrogram
 			#min_value refers to the minimum pixel value taken for the detection.
 			#min_delta correspond to the step size for the detection itterations.
 			#min_pix correspind to the minimium amount of pixel to be taken into account to compute structures.
-			d = Dendrogram.compute(patch, min_value=min_val, min_delta=3*delta, min_npix=min_pix_nb, wcs=patch_wcs, verbose=promt)
+			d = Dendrogram.compute(patch, min_value=min_val, min_delta=3*delta, min_npix=min_pix_nb, wcs=patch_wcs, verbose=False)
 
 			#Note: the structure we chose are the leaves.
 			#taking trunk isn't irrelevant but provide different
@@ -204,39 +211,62 @@ def crea_dendrogram(fits_file, delta, promt=False):
 			#particular morphologies of signal.
 			if len(d.leaves)>0:
 
-				cat = pp_catalog(d.leaves, metadata, verbose=promt)
-				if promt:
-					cat.pprint(show_unit=True, max_lines=10)
+				cat = pp_catalog(d.leaves, metadata, verbose=False)
 				
-
 				#The information we keep in the catalog
-				RA,DEC = patch_wcs.wcs_pix2world(cat["x_cen"][:], cat["y_cen"][:], 0)
+				RA, DEC = patch_wcs.wcs_pix2world(cat["x_cen"][:], cat["y_cen"][:], 0)
 				flux = cat["flux"][:]*1e3
+				surf_flux = flux/cat["area_exact"]
 				Maj = cat["major_sigma"][:]
 				Min = cat["minor_sigma"][:]
 				PA = cat["position_angle"][:]
 				
-				e = np.sqrt(1 - (Min**2)/(Maj**2))
-				mask1 = e <= .95
-
-				RA = RA[mask1]
-				DEC = DEC[mask1]
-				flux = flux[mask1]
-				Min = Min[mask1]
-				Maj = Maj[mask1]
-				PA = PA[mask1]
-				 
-				data = np.array([RA,DEC,flux,Maj,Min, PA]).T
-				fmt=['%.6f', '%.6f', '%.6e', '%.3f', '%.3f', '%.1f']
+				data = np.array([RA, DEC, flux, surf_flux, Maj, Min, PA]).T
 				
-
+				data, ttsc = clean_cat(data, min_val, res, R1, P1, R2, P2)
+				
+				data = np.hstack((data,np.zeros((data.shape[0],1))))
+				
+				#In this condition, I check if there are sources to test with other wavelength counter parts.
+				#For now, I test with nearest neighbour cross match the existance of the sources and reinject them
+				#Into the data with they have a counterpart.
+				if len(ttsc)>0:
+					input_table = Table()
+					input_table["ra"] = ttsc[:,0]
+					input_table["dec"] = ttsc[:,1]
+					input_table["flux"] = ttsc[:,2]
+					input_table["surf_flux"] = ttsc[:,3]
+					input_table["maj"] = ttsc[:,4]
+					input_table["min"] = ttsc[:,5]
+					input_table["pa"] = ttsc[:,6]
+					
+					R = (512/2)*np.sqrt(2)*hdr["CDELT2"]
+					center_point = pixel_to_skycoord(512/2, 512/2, wcs=patch_wcs)
+					DESI = Vizier.query_region(center_point, radius=R*u.deg, catalog="VII/292/north")[0]
+					
+					high_X_Allwise = XMatch.query(cat1=input_table, cat2='vizier:II/328/allwise', max_distance=4*u.arcsec, colRA1='ra', colDec1='dec', colRA2='RAJ2000', colDec2='DEJ2000')
+					high_X_DESI, _ = NN_Xmatch(input_table, DESI, 3*u.arcsec, 'ra', 'dec', 'RAJ2000', 'DEJ2000')
+					
+					allwise = np.array([high_X_Allwise["ra"], high_X_Allwise["dec"], high_X_Allwise["flux"], high_X_Allwise["surf_flux"], high_X_Allwise["maj"], high_X_Allwise["min"],
+									high_X_Allwise["pa"], np.ones(len(high_X_Allwise))]).T
+					desi = np.array([high_X_DESI["ra"], high_X_DESI["dec"], high_X_DESI["flux"], high_X_DESI["surf_flux"], high_X_DESI["maj"], high_X_DESI["min"],
+									high_X_DESI["pa"], np.ones(len(high_X_DESI))]).T
+								
+					matched = np.vstack([allwise, desi])
+					matched = third_NMS(matched, res)
+					
+					data = np.vstack([data, matched])
+				
 				#Append to the end of the file.
+				fmt = ['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%i']
 				f = open(name_file, 'a')
-				np.savetxt(f, data, fmt=fmt , delimiter='\t', comments='')
+				np.savetxt(f, data, fmt=fmt , delimiter='\t', comments='#')
 				f.close()
-			elif promt:
-				print("No objects found in patch")
 
-	if promt:	
-		print("Catalogs generated !")
 
+	cat = np.loadtxt(name_file, comments="#")
+	final_cat = third_NMS(cat, res)
+	
+	f = open(name_file, 'w')
+	np.savetxt(f, final_cat, fmt=fmt , delimiter='\t', comments='#', header="_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tflag")
+	f.close()

@@ -13,19 +13,6 @@ from astropy.coordinates import SkyCoord
 import os
 from tqdm import tqdm
 
-
-def update_progress(progress):
-	"""
-	Function to update the progress bar in the console.
-	"""
-	bar_length = 100  # Number of characters in the progress bar
-	filled_length = int(bar_length * progress)
-	bar = '#' * filled_length + '-' * (bar_length - filled_length)
-	percentage = int(progress * 100)
-	print(f'\rProgress : |{bar}| {percentage}% ', end='')
-	
-#===============================================================================================================
-
 def Rexcl(flux, P1, R1, P2, R2):
 	"""
 	Rejection radius function:
@@ -55,30 +42,31 @@ def Rexcl(flux, P1, R1, P2, R2):
 	
 #===============================================================================================================
 	
-def clean_cat(name_file, res, R1, P1, R2, P2):
+def clean_cat(data, min_val, res, R1, P1, R2, P2):
 	"""
-	Clean the catalog generated with crea_dendrogram to suppress multiple detections
-	as well as supposedly false detections.
-	This process results in the writing of 2 files:
-		- The cleaned catalog of a field (overwriting the input file).
-		- The "To Test Sources Catalog" (TTSC) contains all rejected sources that could be True detections.
+	Clean the catalog by removing overlapping sources, detected artifacts and sources with low significance.
+	All the remove sources are returned and to be tested with IR/optical counter parts.
 
 	Args:
-		name_file (str): File path of the catalog generated with crea_dendrogram.
+		data (numpy.ndarray): Array containing catalog data, with columns representing:
+			- Column 0: Right Ascension (RA) in degrees
+			- Column 1: Declination (DEC) in degrees
+			- Column 2: Flux of the source
+			- Column 3: Surface flux density
+			- Column 4: Major axis of the source
+			- Column 5: Minor axis of the source
+			- Column 6: Position angle of the source
+		min_val (float): Minimum pixel value for detection.
 		res (float): Resolution of the instrument.
-		R1 (float): Parameter R1 for rejection radius calculation.
-		P1 (float): Parameter P1 for rejection radius calculation.
-		R2 (float): Parameter R2 for rejection radius calculation.
-		P2 (float): Parameter P2 for rejection radius calculation.
+		R1 (float): Parameter for cleaning the catalog.
+		P1 (float): Parameter for cleaning the catalog.
+		R2 (float): Parameter for cleaning the catalog.
+		P2 (float): Parameter for cleaning the catalog.
 
 	Returns:
-		None.
-
-	Information about the number of sources cleaned and sources to test are printed at the end.
+		final_data (numpy.ndarray): Cleaned catalog data containing sources.
+		final_ttsc (numpy.ndarray): Excluded sources to be match with optical/IR counter parts.
 	"""
-	excl = 0 #Number of exclusion (is displayed for the user)
-	
-	data = np.loadtxt(name_file, skiprows=1)
 	data = data[np.argsort(-data[:,2])]
 	
 	i = 0 #progress indice
@@ -92,14 +80,10 @@ def clean_cat(name_file, res, R1, P1, R2, P2):
 		c2 = SkyCoord(data[i+1:,0]*u.deg, data[i+1:,1]*u.deg, frame='icrs')
 		sep_array = c1.separation(c2)
 			
-		#Here is the exclusion condition,
-		#A source to be excluded must :
-		#Be closer than the resolution to the current source
-		#or be inside the rejection radius with a flux lower than 100 mJy
+		
 		mask1 = sep_array.arcsecond<res
-		mask2 = np.logical_and(data[i+1:,2]<1e2,sep_array.arcsecond < R)
+		mask2 = np.logical_and(data[i+1:,2] < 50, sep_array.arcsecond < R)
 		excl_ind = np.where(np.logical_or(mask2, mask1))[0] + i + 1
-			
 			
 		for ind in sorted(excl_ind, reverse=True):
 				
@@ -107,46 +91,35 @@ def clean_cat(name_file, res, R1, P1, R2, P2):
 			excl_array.append(excl_source)
 				
 			data = np.delete(data, ind, 0)
-			excl+=1
 		
 		i+=1
 		
-		progress = (i + 1) / (data.shape[0]-1)
-		update_progress(progress)
-	
-	
-		
 	data_pos = SkyCoord(data[:,0]*u.deg, data[:,1]*u.deg, frame='icrs')
-	totest=0
 	
-	fitsname = name_file.split("/")[-1].split("_")[0]
+	ttsc = []
 	for source in excl_array:
 				
 		excl_pos = SkyCoord(source[0]*u.deg, source[1]*u.deg, frame='icrs')
 		sep_array = excl_pos.separation(data_pos)
 				
 		
-		if source[2]>1 and not(any(sep_array.arcsecond<res)):
-			TTSC = open("./TTSC/TTSC_"+fitsname+".txt", 'a')
-			np.savetxt(TTSC, [source], delimiter='\t')
-			TTSC.close()
-			totest+=1
+		if not(any(sep_array.arcsecond<res)):
+			ttsc.append(source)
+		
+	ttsc = np.array(ttsc)
 	
-	final_data = data[data[:,2]>1]
-	excl += len(data)-len(final_data)
+	S_threshold = res*(min_val*1e3)
 	
-	TTSC = open("./TTSC/TTSC_"+fitsname+".txt", 'a')
-	np.savetxt(TTSC, data[data[:,2]<=1], delimiter='\t')
-	TTSC.close()
-	totest += len(data)-len(final_data)
+	mask = np.logical_and(data[:, 3] > 1e-2, data[:, 2] > S_threshold)
+
+	final_data = data[mask]
+	if len(ttsc)>0:
+		final_ttsc = np.vstack([ttsc, data[np.logical_not(mask)]])
+	else:
+		final_ttsc = data[np.logical_not(mask)]
+		
 	
-	f = open(name_file, 'w')
-	np.savetxt(f, np.hstack((final_data,np.zeros((final_data.shape[0],1)))), fmt=['%.6f', '%.6f', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], header="_RAJ2000\t_DECJ2000\tSpeakTot\tMaj\tMin\tPA\tflag\n", delimiter='\t', comments='')
-	f.close()
-	
-	print("\nNumber of confidence sources:", len(final_data))
-	print("Number of exclusions: %d"%excl)
-	print("%d sources to test"%totest)
+	return final_data, final_ttsc
 	
 #===============================================================================================================
 
@@ -237,24 +210,26 @@ def get_overlap_sources(cat, field_fits):
 		
 #===============================================================================================================
 		
-def flux_NMS(cat, reject):
+def third_NMS(cat, reject, col=2):
 	"""
-	Perform a Non-Maximum Suppression (NMS) process on a catalog.
-	The parameter taken into account for the suppression is the integrated flux of the sources.
+	Perform third non-maximum suppression (NMS) on the catalog to remove nearby duplicate sources.
 
 	Args:
-		cat (numpy.ndarray): Input catalog containing source information.
-		reject (float): Separation threshold for exclusion.
+		cat (numpy.ndarray): Array containing catalog data.
+		reject (float): Threshold distance to reject nearby sources, in arcseconds.
+		col (int, optional): Index of the column representing the significance of sources. Default is 2.
+					If col=-1, don't sort the catalog.
 
 	Returns:
-		numpy.ndarray: Catalog after the Third NMS process.
+		numpy.ndarray: Catalog data after third NMS.
 	"""
 
-	excl = 0
-
-	cat = cat[np.argsort(-cat[:,2])]
+	if col==-1:
+		pass
+	else:
+		cat = cat[np.argsort(-cat[:,col])]
+		
 	i = 0
-	print("Third NMS process...")
 	while i<cat.shape[0]-1:
 
 		c1 = SkyCoord(cat[i,0]*u.deg, cat[i,1]*u.deg, frame='icrs')
@@ -266,13 +241,7 @@ def flux_NMS(cat, reject):
 
 		for ind in sorted(excl_ind, reverse=True):
 			cat = np.delete(cat, ind, 0)
-			excl+=1
-
+			
 		i+=1
-
-		progress = (i + 1) / (cat.shape[0]-1)
-		update_progress(progress)
-
-	print("\nNumber of exclusions : %d\n"%excl)
-
+		
 	return cat

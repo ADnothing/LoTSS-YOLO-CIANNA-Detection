@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 29 Feb 2024
+#Adrien Anthore, 06 Mar 2024
 #main.py
 #main python file
 #call: python3 -W "ignore" main.py [-c] <config file>

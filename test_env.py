@@ -65,6 +65,19 @@ except:
 	print("Failed to import Numba!")
 print("="*80)
 
+#astroquery check
+print("\t"*3,"astroquery")
+try:
+	import astroquery
+	print("astroquery checked!")
+	if astroquery.__version__ != '0.4.6':
+		print("WARNING")
+		print(f"You are using astroquery {astroquery.__version__}")
+		print("Make sure it is compatible with astroquery 0.4.6")
+except:
+	print("Failed to import astroquery!")
+print("="*80)
+
 #tqdm check
 print("\t"*3,"tqdm")
 try:

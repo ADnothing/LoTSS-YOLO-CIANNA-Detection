@@ -240,22 +240,25 @@ def crea_dendrogram(fits_file, params, p=85):
 					input_table["min"] = ttsc[:,5]
 					input_table["pa"] = ttsc[:,6]
 					
-					R = (512/2)*np.sqrt(2)*hdr["CDELT2"]
-					center_point = pixel_to_skycoord(512/2, 512/2, wcs=patch_wcs)
-					DESI = Vizier.query_region(center_point, radius=R*u.deg, catalog="VII/292/north")[0]
-					
 					high_X_Allwise = XMatch.query(cat1=input_table, cat2='vizier:II/328/allwise', max_distance=4*u.arcsec, colRA1='ra', colDec1='dec', colRA2='RAJ2000', colDec2='DEJ2000')
-					high_X_DESI, _ = NN_Xmatch(input_table, DESI, 3*u.arcsec, 'ra', 'dec', 'RAJ2000', 'DEJ2000')
-					
 					allwise = np.array([high_X_Allwise["ra"], high_X_Allwise["dec"], high_X_Allwise["flux"], high_X_Allwise["surf_flux"], high_X_Allwise["maj"], high_X_Allwise["min"],
 									high_X_Allwise["pa"], np.ones(len(high_X_Allwise))]).T
-					desi = np.array([high_X_DESI["ra"], high_X_DESI["dec"], high_X_DESI["flux"], high_X_DESI["surf_flux"], high_X_DESI["maj"], high_X_DESI["min"],
-									high_X_DESI["pa"], np.ones(len(high_X_DESI))]).T
+									
+					try:
+						R = (512/2)*np.sqrt(2)*hdr["CDELT2"]
+						center_point = pixel_to_skycoord(512/2, 512/2, wcs=patch_wcs)
+						DESI = Vizier.query_region(center_point, radius=R*u.deg, catalog="VII/292/north")[0]
+						high_X_DESI, _ = NN_Xmatch(input_table, DESI, 3*u.arcsec, 'ra', 'dec', 'RAJ2000', 'DEJ2000')
+						desi = np.array([high_X_DESI["ra"], high_X_DESI["dec"], high_X_DESI["flux"], high_X_DESI["surf_flux"], high_X_DESI["maj"], high_X_DESI["min"],
+										high_X_DESI["pa"], np.ones(len(high_X_DESI))]).T
 								
-					matched = np.vstack([allwise, desi])
-					matched = third_NMS(matched, res)
+						matched = np.vstack([allwise, desi])
+						matched = third_NMS(matched, res)
+						data = np.vstack([data, matched])
+						
+					except IndexError:
+						data = np.vstack([data, allwise])
 					
-					data = np.vstack([data, matched])
 				
 				#Append to the end of the file.
 				fmt = ['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%i']

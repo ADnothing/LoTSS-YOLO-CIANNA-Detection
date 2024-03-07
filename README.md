@@ -1,4 +1,4 @@
-# LoTSS YOLO Detection
+# LoTSS YOLO-CIANNA Detection
 
 ## Introduction
 

@@ -46,8 +46,8 @@ def run(fits_file):
 	if flag:
 		crea_dendrogram(fits_file, [res, sensi, R1, P1, R2, P2])
 
-	with open("done.txt", "a") as done_file:
-		done_file.write(fits_file + "\n")
+		with open("done.txt", "a") as done_file:
+			done_file.write(fits_file + "\n")
 
 def initialisation():
 	global c

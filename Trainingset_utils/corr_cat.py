@@ -108,7 +108,7 @@ def clean_cat(data, min_val, res, R1, P1, R2, P2):
 		
 	ttsc = np.array(ttsc)
 	
-	S_threshold = res*(min_val*1e3)
+	S_threshold = 10*(min_val*1e3)
 	
 	mask = np.logical_and(data[:, 3] > 1e-2, data[:, 2] > S_threshold)
 

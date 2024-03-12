@@ -6,13 +6,6 @@
 
 from aux_fct import *
 
-def update_progress(progress):
-
-	bar_length = 100
-	filled_length = int(bar_length * progress)
-	bar = '#' * filled_length + '-' * (bar_length - filled_length)
-	percentage = int(progress * 100)
-	print(f'\rProgress : |{bar}| {percentage}% ', end='')
 
 def check_overlap(file1, file2):
 

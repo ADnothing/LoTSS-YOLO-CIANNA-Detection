@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 06 Mar 2024
+#Adrien Anthore, 09 Apr 2024
 #main.py
 #main python file
 #call: python3 -W "ignore" main.py [-c] <config file>
@@ -11,13 +11,12 @@ import numpy as np
 
 import os, configparser, sys, time, argparse
 from multiprocessing import Pool
+import concurrent.futures
 
 from tqdm import tqdm
 
 from make_cat import crea_dendrogram
-from corr_cat import check_overlap, get_overlap_sources, third_NMS
-
-c = False
+from corr_cat import third_NMS
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description='Create catalog of detection with AstroDendro package.')
@@ -32,24 +31,44 @@ def read_config_file(file_path):
 	return config['Parameters']
 
 def run(fits_file):
-	global c
+
 	flag = 1
-	fits_file = path + fits_file
+	f1 = path + fits_file
 
 	with open("done.txt", "r") as done_file:
-		if fits_file in done_file.read():
+		if f1 in done_file.read():
 			flag = 0
 
-	if fits_file[-5:] != ".fits":
+	if f1[-5:] != ".fits":
 		flag = 0
 
 	if flag:
-		crea_dendrogram(fits_file, [res, sensi, R1, P1, R2, P2])
+		crea_dendrogram(f1, [res, sensi, R1, P1, R2, P2])
 
 		with open("done.txt", "a") as done_file:
+			done_file.write(f1 + "\n")
+
+def overlap(fits_file):
+
+	flag = 1
+	temp_list = [f2 for f2 in list_fits if f2 != fits_file]
+	
+	with open("NMSed.txt", "r") as done_file:
+		if fits_file in done_file.read():
+			flag = 0
+	
+	if fits_file[-5:] != ".fits":
+		flag = 0
+		
+	if flag:
+		third_NMS(fits_file, temp_list, path, res)
+
+		with open("NMSed.txt", "a") as done_file:
 			done_file.write(fits_file + "\n")
+	
 
 def initialisation():
+
 	global c
 	args = parse_arguments()
 	config_file_path = args.config_file
@@ -57,17 +76,30 @@ def initialisation():
 	
 	if not(os.path.exists("./dendrocat/")):
 		os.makedirs("./dendrocat/")
+		
+	if not(os.path.exists("./Catalogs/")):
+		os.makedirs("./Catalogs/")
+		
+	if not(os.path.exists("./raw/")):
+		os.makedirs("./raw/")
 	
 	if not c:
 		done = open("done.txt", "w")
 		done.close()
+		NMSed = open("NMSed.txt", "w")
+		NMSed.close()
 	
 		for f in os.listdir("./dendrocat/"):
 			os.remove("./dendrocat/" + f)
 	else:
 		if not(os.path.exists("./done.txt")):
-			print("No progress saved.")
+			print("No dendrocat saved.")
 			done = open("done.txt", "w")
+			done.close()
+			
+		if not(os.path.exists("./NMSed.txt")):
+			print("No NMS saved.")
+			done = open("NMSed.txt", "w")
 			done.close()
 		
 	parameters = read_config_file(config_file_path)
@@ -80,6 +112,9 @@ def initialisation():
 	P1 = float(parameters.get('P1'))
 	R2 = float(parameters.get('R2'))
 	P2 = float(parameters.get('P2'))
+	
+	global list_fits
+	list_fits = os.listdir(path)
 
 
 
@@ -87,60 +122,15 @@ if __name__ == "__main__":
 
 	initialisation()
 
-	nbsou = 0
-	f = open("full_"+survey+"_DencdroCat.txt", "w")
-	f.write("#_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tflag\n")
-
-	list_fits = os.listdir(path)
-
 	print("Detection:")
-	with Pool(processes=12) as pool:
+	with Pool(processes=10) as pool:
 		pool.map(run, list_fits)
 	"""for fi in list_fits:
 		print(fi)
 		crea_dendrogram(path+fi, [res, sensi, R1, P1, R2, P2])"""
 		
 	print("Overlap management:")
-	list_cat = []
-	for ind, f1 in enumerate(list_fits):
-		flag=False
-		temp_list = list_fits[:ind] + list_fits[ind+1:] 
-		cat1 = "./dendrocat/"+f1[:-5]+"_DendCat.txt"
-		
-		list_cat.append(cat1)
-		
-		ctot = np.loadtxt(cat1, comments='#')
-
-		for f2 in temp_list:
-			fits1 = path + f1
-			fits2 = path + f2
-
-			cat2 = "./dendrocat/"+f2[:-5]+"_DendCat.txt"
-
-			if check_overlap(fits1,fits2):
-				flag=True
-				c2 = np.loadtxt(cat2, comments='#')
-				overlap_c2, residual_cat = get_overlap_sources(c2, fits1)
-				
-				ctot = np.vstack((ctot, overlap_c2))
-				
-				f_temp = open(cat2, "w")
-				np.savetxt(f_temp, residual_cat, fmt=['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], header="_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tflag\n" , delimiter='\t', comments='#')
-				f_temp.close()
-				
-		if flag:
-			ctot = third_NMS(ctot, res)
-			
-		f_temp = open(cat1, "w")
-		np.savetxt(f_temp, ctot, fmt=['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], delimiter='\t')
-		f_temp.close()
-
-	for cat_name in tqdm(list_cat):
-		cat = np.loadtxt(cat_name, comments='#')
-		nbsou += cat.shape[0]
-		np.savetxt(f, cat, fmt=['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%i'], delimiter='\t')
-		
-	f.close()
+	with Pool(processes=10) as pool:
+		pool.map(overlap, list_fits)
 	
 	print("END")
-	print(nbsou, "sources catalogued")

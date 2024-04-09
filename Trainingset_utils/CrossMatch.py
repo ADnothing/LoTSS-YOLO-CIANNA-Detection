@@ -10,9 +10,9 @@ import numpy as np
 
 from astropy import units as u
 
-from numba import njit
+from numba import jit
 
-@njit
+@jit(cache=True, nopython=True, parallel=True)
 def match_coord(cat2cross, refcoord, sep):
 	"""
 	Perform coordinate matching between two catalogs.

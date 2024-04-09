@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 06 Mar 2024
+#Adrien Anthore, 09 Apr 2024
 #Env: Python 3.6.7
 #corr_cat.py
 
@@ -82,7 +82,7 @@ def clean_cat(data, min_val, res, R1, P1, R2, P2):
 			
 		
 		mask1 = sep_array.arcsecond<res
-		mask2 = np.logical_and(data[i+1:,2] < 50, sep_array.arcsecond < R)
+		mask2 = np.logical_and(data[i+1:,2] < 0.05*flux, sep_array.arcsecond < R)
 		excl_ind = np.where(np.logical_or(mask2, mask1))[0] + i + 1
 			
 		for ind in sorted(excl_ind, reverse=True):
@@ -110,7 +110,7 @@ def clean_cat(data, min_val, res, R1, P1, R2, P2):
 	
 	S_threshold = 10*(min_val*1e3)
 	
-	mask = np.logical_and(data[:, 3] > 1e-2, data[:, 2] > S_threshold)
+	mask = np.logical_and(data[:, 3] > 1.2e-2, data[:, 2] > S_threshold)
 
 	final_data = data[mask]
 	if len(ttsc)>0:
@@ -144,10 +144,10 @@ def check_overlap(file1, file2):
 	hdul2 = fits.open(file2)
 
 	side1 = np.max(hdul1[0].data.shape)*hdul1[0].header["CDELT2"]
-	d1 = np.sqrt(2)*side1/2
+	d1 = side1/2
 	
 	side2 = np.max(hdul2[0].data.shape)*hdul2[0].header["CDELT2"]
-	d2 = np.sqrt(2)*side2/2
+	d2 = side2/2
 
 	ra1 = hdul1[0].header["CRVAL1"]
 	dec1 = hdul1[0].header["CRVAL2"]
@@ -188,7 +188,7 @@ def get_overlap_sources(cat, field_fits):
 	field_hdul = fits.open(field_fits)
 	
 	side = np.max(field_hdul[0].data.shape)*field_hdul[0].header["CDELT2"]
-	d = np.sqrt(2)*side/2
+	d = 1.1*(side/2)
 	
 	Cra = field_hdul[0].header["CRVAL1"]
 	Cdec = field_hdul[0].header["CRVAL2"]
@@ -210,24 +210,78 @@ def get_overlap_sources(cat, field_fits):
 		
 #===============================================================================================================
 		
-def third_NMS(cat, reject, col=2):
+def third_NMS(f1, list_fits, path, reject, col=7):
 	"""
-	Perform third non-maximum suppression (NMS) on the catalog to remove nearby duplicate sources.
+	Apply a Non-Max Suppression (NMS) on catalogs from images that have an overlap.
+	The method use for the suppression is a Nearest Neigbourg suppression.
+	
+	Args:
+		f1 (str): File name of the first FITS file.
+		list_fits (list): List of file names of FITS files to compare with.
+		path (str): Path to the FITS files.
+		reject (float): Threshold distance for rejecting redundant sources, in arcseconds.
+		col (int, optional): Index of the column in the catalog containing the confidence score. Default is 7.
+
+	The resulting catalog from the image in the fits f1 is saved as a text file in the 'Catalogs' directory.
+	"""
+	
+	fits1 = path + f1
+	cat1 = "./dendrocat/"+f1[:-5]+"_DendCat.txt"
+	c1 = np.loadtxt(cat1, comments='#')
+		
+	for f2 in tqdm(list_fits):
+		
+		fits2 = path + f2
+		cat2 = "./dendrocat/"+f2[:-5]+"_DendCat.txt"
+			
+		if check_overlap(fits1,fits2):
+			
+			overlap_c1, residual_c1 = get_overlap_sources(c1, fits2)
+			
+			c2 = np.loadtxt(cat2, comments='#')
+			overlap_c2, residual_c2 = get_overlap_sources(c2, fits1)
+					
+			excl_ind = []
+				
+			for idx, source in enumerate(overlap_c1):
+					
+				pos = SkyCoord(source[0]*u.deg, source[1]*u.deg, frame='icrs')
+				pos_test = SkyCoord(overlap_c2[:,0]*u.deg, overlap_c2[:,1]*u.deg, frame='icrs')
+					
+				sep_array = pos.separation(pos_test)
+					
+				test_ind = np.where(sep_array.arcsecond < reject)[0]
+					
+				if any(source[col] >= overlap_c2[test_ind,col]):
+					excl_ind.append(idx)
+						
+			for ind in sorted(excl_ind, reverse=True):
+				overlap_c1 = np.delete(overlap_c1, ind, 0)
+						
+					
+			c1 = np.vstack((residual_c1, overlap_c1))
+			
+		
+	f = open("./Catalogs/"+f1[:-5]+"_DendCat.txt", "w")
+	np.savetxt(f, c1, fmt=['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%.3e', '%i'], delimiter='\t', header="_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tRMS\tflag")
+	f.close()
+
+#===============================================================================================================
+		
+def clean_redundancy(cat, reject, col=7):
+	"""
+	Remove redundant sources from a catalog based on a separation threshold.
 
 	Args:
-		cat (numpy.ndarray): Array containing catalog data.
-		reject (float): Threshold distance to reject nearby sources, in arcseconds.
-		col (int, optional): Index of the column representing the significance of sources. Default is 2.
-					If col=-1, don't sort the catalog.
+		cat (numpy.ndarray): Input catalog containing source positions and other information.
+		reject (float): Threshold distance for rejecting redundant sources, in arcseconds.
+		col (int, optional): Index of the column use to sort the catalog. Default is 7.
 
 	Returns:
-		numpy.ndarray: Catalog data after third NMS.
+		numpy.ndarray: Catalog with redundant sources removed.
 	"""
-
-	if col==-1:
-		pass
-	else:
-		cat = cat[np.argsort(-cat[:,col])]
+	
+	cat = cat[np.argsort(-cat[:,col])]
 		
 	i = 0
 	while i<cat.shape[0]-1:

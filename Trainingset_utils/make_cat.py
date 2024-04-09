@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 06 Mar 2024
+#Adrien Anthore, 09 Apr 2024
 #Env: Python 3.6.7
 #make_cat.py
 
 import numpy as np
-
+from multiprocessing import Pool
 from tqdm import tqdm
 
 import time
@@ -24,7 +24,7 @@ Vizier.ROW_LIMIT = -1
 
 from astrodendro import Dendrogram, pp_catalog
 
-from corr_cat import third_NMS, clean_cat
+from corr_cat import clean_redundancy, clean_cat
 from CrossMatch import NN_Xmatch
 
 
@@ -182,6 +182,11 @@ def crea_dendrogram(fits_file, params, p=85):
 	
 	mean = np.nanmean(image)
 	
+	rawcat = "./raw/"+fits_file.split("/")[-1][:-5]+"_rawDendCat.txt"
+	f = open(rawcat, 'w')
+	f.write("#_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tRMS\n")
+	f.close()
+	
 	for i in tqdm(range(nb_patch)):
 	
 		patch = patches[i].data
@@ -213,6 +218,10 @@ def crea_dendrogram(fits_file, params, p=85):
 
 				cat = pp_catalog(d.leaves, metadata, verbose=False)
 				
+				leaves_mask = np.array([np.logical_not(leaf.get_mask()) for leaf in d.leaves])
+				full_mask = np.all(leaves_mask, axis=0)
+				noise_lvl = np.nanmean(patch[full_mask])
+				
 				#The information we keep in the catalog
 				RA, DEC = patch_wcs.wcs_pix2world(cat["x_cen"][:], cat["y_cen"][:], 0)
 				flux = cat["flux"][:]*1e3
@@ -220,8 +229,13 @@ def crea_dendrogram(fits_file, params, p=85):
 				Maj = cat["major_sigma"][:]
 				Min = cat["minor_sigma"][:]
 				PA = cat["position_angle"][:]
+				RMS = noise_lvl*np.ones(len(cat))
 				
-				data = np.array([RA, DEC, flux, surf_flux, Maj, Min, PA]).T
+				data = np.array([RA, DEC, flux, surf_flux, Maj, Min, PA, RMS]).T
+				
+				f = open(rawcat, 'a')
+				np.savetxt(f, data, fmt=['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%.3e'], delimiter='\t')
+				f.close()
 				
 				data, ttsc = clean_cat(data, min_val, res, R1, P1, R2, P2)
 				
@@ -239,21 +253,32 @@ def crea_dendrogram(fits_file, params, p=85):
 					input_table["maj"] = ttsc[:,4]
 					input_table["min"] = ttsc[:,5]
 					input_table["pa"] = ttsc[:,6]
+					input_table["rms"] = ttsc[:,7]
 					
-					high_X_Allwise = XMatch.query(cat1=input_table, cat2='vizier:II/328/allwise', max_distance=4*u.arcsec, colRA1='ra', colDec1='dec', colRA2='RAJ2000', colDec2='DEJ2000', cache=False)
-					allwise = np.array([high_X_Allwise["ra"], high_X_Allwise["dec"], high_X_Allwise["flux"], high_X_Allwise["surf_flux"], high_X_Allwise["maj"], high_X_Allwise["min"],
-									high_X_Allwise["pa"], np.ones(len(high_X_Allwise))]).T
+					X_Allwise = XMatch.query(cat1=input_table, cat2='vizier:II/328/allwise', max_distance=4*u.arcsec, colRA1='ra', colDec1='dec', colRA2='RAJ2000', colDec2='DEJ2000', cache=False)
+					allwise = np.array([X_Allwise["ra"], X_Allwise["dec"], X_Allwise["flux"], X_Allwise["surf_flux"], X_Allwise["maj"], X_Allwise["min"],
+									X_Allwise["pa"], X_Allwise["rms"], np.ones(len(X_Allwise))]).T
 									
 					try:
 						R = (512/2)*np.sqrt(2)*hdr["CDELT2"]
 						center_point = pixel_to_skycoord(512/2, 512/2, wcs=patch_wcs)
+						
 						DESI = Vizier.query_region(center_point, radius=R*u.deg, catalog="VII/292/north", cache=False)[0]
-						high_X_DESI, _ = NN_Xmatch(input_table, DESI, 3*u.arcsec, 'ra', 'dec', 'RAJ2000', 'DEJ2000')
-						desi = np.array([high_X_DESI["ra"], high_X_DESI["dec"], high_X_DESI["flux"], high_X_DESI["surf_flux"], high_X_DESI["maj"], high_X_DESI["min"],
-										high_X_DESI["pa"], np.ones(len(high_X_DESI))]).T
-								
+						DESI_X_Allwise = XMatch.query(cat1=DESI, cat2='vizier:II/328/allwise', max_distance=1*u.arcsec, colRA1='RAJ2000', colDec1='DEJ2000', colRA2='RAJ2000', colDec2='DEJ2000', cache=False)
+						
+						X_DESI, _ = NN_Xmatch(input_table, DESI, 2*u.arcsec, 'ra', 'dec', 'RAJ2000', 'DEJ2000')
+						desi = np.array([X_DESI["ra"], X_DESI["dec"], X_DESI["flux"], X_DESI["surf_flux"], X_DESI["maj"], X_DESI["min"],
+										X_DESI["pa"], X_DESI["rms"], np.ones(len(X_DESI))]).T
+										
+						
+						X_both, _ = NN_Xmatch(input_table, DESI_X_Allwise, 6*u.arcsec, 'ra', 'dec', 'RAJ2000_1', 'DEJ2000_1')
+						both = np.array([X_both["ra"], X_both["dec"], X_both["flux"], X_both["surf_flux"], X_both["maj"], X_both["min"],
+										X_both["pa"], X_both["rms"], 2*np.ones(len(X_both))]).T
+							
 						matched = np.vstack([allwise, desi])
-						matched = third_NMS(matched, res)
+						matched =np.vstack([matched, both])
+						matched = matched[np.argsort(-matched[:,-1])]
+						matched = clean_redundancy(matched, res)
 						data = np.vstack([data, matched])
 						
 					except IndexError:
@@ -261,15 +286,15 @@ def crea_dendrogram(fits_file, params, p=85):
 					
 				
 				#Append to the end of the file.
-				fmt = ['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%i']
+				fmt = ['%.6f', '%.6f', '%.6e', '%.6e', '%.3f', '%.3f', '%.1f', '%.3e', '%i']
 				f = open(name_file, 'a')
 				np.savetxt(f, data, fmt=fmt , delimiter='\t', comments='#')
 				f.close()
 
 
 	cat = np.loadtxt(name_file, comments="#")
-	final_cat = third_NMS(cat, res)
+	final_cat = clean_redundancy(cat, res)
 	
 	f = open(name_file, 'w')
-	np.savetxt(f, final_cat, fmt=fmt , delimiter='\t', comments='#', header="_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tflag")
+	np.savetxt(f, final_cat, fmt=fmt , delimiter='\t', comments='#', header="_RAJ2000\t_DECJ2000\tSpeakTot\tSdensity\tMaj\tMin\tPA\tRMS\tflag")
 	f.close()

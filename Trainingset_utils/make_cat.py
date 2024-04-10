@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#Adrien Anthore, 09 Apr 2024
+#Adrien Anthore, 10 Apr 2024
 #Env: Python 3.6.7
 #make_cat.py
 
@@ -220,7 +220,7 @@ def crea_dendrogram(fits_file, params, p=85):
 				
 				leaves_mask = np.array([np.logical_not(leaf.get_mask()) for leaf in d.leaves])
 				full_mask = np.all(leaves_mask, axis=0)
-				noise_lvl = np.nanmean(patch[full_mask])
+				noise_lvl = np.sqrt(np.mean((patch[full_mask])**2))
 				
 				#The information we keep in the catalog
 				RA, DEC = patch_wcs.wcs_pix2world(cat["x_cen"][:], cat["y_cen"][:], 0)

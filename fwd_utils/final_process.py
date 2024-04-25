@@ -163,7 +163,7 @@ if __name__ == "__main__":
 	global list_fits
 	done_cats = os.listdir("./cat_res")
 	list_fits = [f[5:-4] + ".fits" for f in done_cats]
-	print(list_fits)
+	
 	with Pool(processes=12) as pool:
 		pool.map(overlap, list_fits)
 

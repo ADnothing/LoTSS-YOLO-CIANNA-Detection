@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
-#Adrien ANTHORE, 05 Feb 2024
+#Adrien ANTHORE, 25 Apr 2024
 #Env: Python 3.6.7
 #final_process.py
 
 from aux_fct import *
-
 
 def check_overlap(file1, file2):
 
@@ -13,10 +12,10 @@ def check_overlap(file1, file2):
 	hdul2 = fits.open(file2)
 
 	side1 = np.max(hdul1[0].data.shape)*hdul1[0].header["CDELT2"]
-	d1 = np.sqrt(2)*side1/2
+	d1 = side1/2
 	
 	side2 = np.max(hdul2[0].data.shape)*hdul2[0].header["CDELT2"]
-	d2 = np.sqrt(2)*side2/2
+	d2 = side2/2
 
 	ra1 = hdul1[0].header["CRVAL1"]
 	dec1 = hdul1[0].header["CRVAL2"]
@@ -34,12 +33,29 @@ def check_overlap(file1, file2):
 	else:
 		return False
 
+
 def get_overlap_sources(cat, field_fits):
+	"""
+	Extract sources from a catalog that overlap and do not overlap with a field.
+
+	Args:
+		cat (numpy.ndarray): Input catalog containing source positions.
+		field_fits (str): File path of the FITS file representing the field.
+
+	Returns:
+		tuple: Two numpy arrays - the first containing sources that overlap with the field,
+			and the second contains sources that do not overlap.
+
+	This function extracts sources from a catalog based on whether they overlap with
+	a specified field represented by a FITS file. It calculates the diagonal distance
+	of the field and compares it with the separation between the center of the field
+	and the positions of sources in the catalog.
+	"""
 	
 	field_hdul = fits.open(field_fits)
 	
 	side = np.max(field_hdul[0].data.shape)*field_hdul[0].header["CDELT2"]
-	d = np.sqrt(2)*side/2
+	d = 1.1*(side/2)
 	
 	Cra = field_hdul[0].header["CRVAL1"]
 	Cdec = field_hdul[0].header["CRVAL2"]
@@ -58,80 +74,97 @@ def get_overlap_sources(cat, field_fits):
 	cat_residual = cat[mask_residual]
 	
 	return cat_overlaped, cat_residual
+
+def third_NMS(f1, list_fits, path, reject, col=7):
+	"""
+	Apply a Non-Max Suppression (NMS) on catalogs from images that have an overlap.
+	The method use for the suppression is a Nearest Neigbourg suppression.
 	
-def third_NMS(cat, reject, col=2):
+	Args:
+		f1 (str): File name of the first FITS file.
+		list_fits (list): List of file names of FITS files to compare with.
+		path (str): Path to the FITS files.
+		reject (float): Threshold distance for rejecting redundant sources, in arcseconds.
+		col (int, optional): Index of the column in the catalog containing the confidence score. Default is 7.
 
-	if col==-1:
-		pass
-	else:
-		cat = cat[np.argsort(-cat[:,col])]
+	The resulting catalog from the image in the fits f1 is saved as a text file in the 'Catalogs' directory.
+	"""
+	
+	fits1 = path + f1
+	cat1 = "./cat_res/pred_"+f1[:-5]+".txt"
+	c1 = np.loadtxt(cat1, comments='#')
 		
-	i = 0
-	while i<cat.shape[0]-1:
-
-		c1 = SkyCoord(cat[i,0]*u.deg, cat[i,1]*u.deg, frame='icrs')
-		c2 = SkyCoord(cat[i+1:,0]*u.deg, cat[i+1:,1]*u.deg, frame='icrs')
-
-		sep_array = c1.separation(c2)
-
-		excl_ind = np.where(sep_array.arcsecond < reject)[0] + i + 1
-
-		for ind in sorted(excl_ind, reverse=True):
-			cat = np.delete(cat, ind, 0)
+	for f2 in tqdm(list_fits):
+		
+		fits2 = path + f2
+		cat2 = "./cat_res/pred_"+f2[:-5]+".txt"
 			
-		i+=1
+		if check_overlap(fits1,fits2):
+			
+			overlap_c1, residual_c1 = get_overlap_sources(c1, fits2)
+			
+			c2 = np.loadtxt(cat2, comments='#')
+			overlap_c2, residual_c2 = get_overlap_sources(c2, fits1)
+					
+			excl_ind = []
+				
+			for idx, source in enumerate(overlap_c1):
+					
+				pos = SkyCoord(source[0]*u.deg, source[1]*u.deg, frame='icrs')
+				pos_test = SkyCoord(overlap_c2[:,0]*u.deg, overlap_c2[:,1]*u.deg, frame='icrs')
+					
+				sep_array = pos.separation(pos_test)
+					
+				test_ind = np.where(sep_array.arcsecond < reject)[0]
+					
+				if any(source[col] >= overlap_c2[test_ind,col]):
+					excl_ind.append(idx)
+						
+			for ind in sorted(excl_ind, reverse=True):
+				overlap_c1 = np.delete(overlap_c1, ind, 0)
+						
+					
+			c1 = np.vstack((residual_c1, overlap_c1))
+			
 		
-	return cat
+	f = open("./Catalogs/"+f1[:-5]+"_Cat.txt", "w")
+	np.savetxt(f, c1, delimiter='\t')
+	f.close()
+
+
+def overlap(fits_file):
+
+	flag = 1
+	temp_list = [f2 for f2 in list_fits if f2 != fits_file]
+
+	with open("NMSed.txt", "r") as done_file:
+		if fits_file in done_file.read():
+			flag = 0
+
+	if fits_file[-5:] != ".fits":
+		flag = 0
+
+	if flag:
+		third_NMS(fits_file, temp_list, "../LoTSS/", 6, col=5)
+
+		with open("NMSed.txt", "a") as done_file:
+			done_file.write(fits_file + "\n")
 
 
 if __name__ == "__main__":
 
-	nbsou = 0
-	f = open("full_YOLOcat.txt", "w")
+	if not(os.path.exists("./Catalogs/")):
+		os.makedirs("./Catalogs/")
 
-	list_fits = os.listdir(fits_path)
-	
-	list_cat = []
-	for ind, f1 in enumerate(list_fits):
-		flag=False
-		temp_list = list_fits[:ind] + list_fits[ind+1:] 
-		cat1 = "./cat_res/pred_"+f1.split("/")[-1][:-5]+".txt"
-		
-		list_cat.append(cat1)
-		
-		ctot = np.loadtxt(cat1, skiprows=1)
+	if not(os.path.exists("./NMSed.txt")):
+		done = open("NMSed.txt", "w")
+		done.close()
 
-			for f2 in temp_list:
-			fits1 = fits_path + f1
-			fits2 = fits_path + f2
+	global list_fits
+	done_cats = os.listdir("./cat_res")
+	list_fits = [f[5:-4] + ".fits" for f in done_cats]
+	print(list_fits)
+	with Pool(processes=12) as pool:
+		pool.map(overlap, list_fits)
 
-			cat2 = "./cat_res/pred_"+f2.split("/")[-1][:-5]+".txt"
-
-			if check_overlap(fits1,fits2):
-				flag=True
-				c2 = np.loadtxt(cat2, skiprows=1)
-				overlap_c2, residual_cat = get_overlap_sources(c2, fits1)
-				ctot = np.vstack((ctot, overlap_c2))
-				n_ovp+=overlap_c2.shape[0]
-					
-				f_temp = open(cat2, "w")
-				np.savetxt(f_temp, residual_cat)
-				f_temp.close()
-					
-		if flag:
-			ctot = third_NMS(ctot, 6, 4)
-				
-		f_temp = open(cat1, "w")
-		np.savetxt(f_temp, ctot)
-		f_temp.close()
-
-	for cat_name in tqdm(list_cat):
-		cat = np.loadtxt(cat_name, skiprows=1)
-		nbsou += cat.shape[0]
-		np.savetxt(f, cat)
-
-
-	f.close()
-	
 print("END")
-print(nbsou, "sources catalogued")

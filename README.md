@@ -1,5 +1,7 @@
 # LoTSS YOLO-CIANNA Detection
 
+Note: This is not the most up-to-date version of the code, unfortunately I've changed my research focus and so I don't have the time to make the latest version of the code reliable. However, you can find the preliminary results of this pipeline at this [link](https://k-poster.kuoni-congress.info/eas-2024/poster/5149ebf4-c89d-4214-83cc-98bc811f96d7).
+
 ## Introduction
 
 This project takes place in an international effort to develop new data processing and analysis tools for the upcoming Square Kilometer Array (SKA), the first light of which is scheduled for 2028.
